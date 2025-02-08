@@ -1,0 +1,15 @@
+WHITESPACE = _{ " " }
+eoi        = _{ !ANY }
+
+integer = @{ "-"? ~ ASCII_DIGIT+ }
+decimal = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+
+addition       = { "+" }
+subtraction    = { "-" }
+multiplication = { "*" }
+division       = { "/" }
+
+arithmetic_operand  = _{ decimal | integer }
+arithmetic_operator = _{ addition | subtraction | multiplication | division }
+
+arithmetic_expression = _{ arithmetic_operand ~ arithmetic_operator ~ arithmetic_operand ~ eoi }
