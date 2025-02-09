@@ -1,5 +1,4 @@
-WHITESPACE = _{ " " }
-eoi        = _{ !ANY }
+WHITESPACE = _{ " " | "\t" }
 
 integer = @{ "-"? ~ ASCII_DIGIT+ }
 decimal = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
@@ -12,4 +11,4 @@ division       = { "/" }
 arithmetic_operand  = _{ decimal | integer }
 arithmetic_operator = _{ addition | subtraction | multiplication | division }
 
-arithmetic_expression = _{ arithmetic_operand ~ arithmetic_operator ~ arithmetic_operand ~ eoi }
+arithmetic_expression = _{ SOI ~ arithmetic_operand ~ arithmetic_operator ~ arithmetic_operand ~ EOI }
