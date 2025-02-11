@@ -1,14 +1,29 @@
+// Consume spaces and tabs silently.
 WHITESPACE = _{ " " | "\t" }
 
-integer = @{ "-"? ~ ASCII_DIGIT+ }
+// Numeric literal rules.
 decimal = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+integer = @{ "-"? ~ ASCII_DIGIT+ }
+operand = _{ decimal | integer }
 
+// A variable name rule.
+variable_name = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Basic math operator rules.
 addition       = { "+" }
 subtraction    = { "-" }
 multiplication = { "*" }
 division       = { "/" }
+operator = _{ addition | subtraction | multiplication | division }
 
-arithmetic_operand  = _{ decimal | integer }
-arithmetic_operator = _{ addition | subtraction | multiplication | division }
+// A parenthesized sub-expression to mark a branch in the parsed abstract syntax tree.
+parenthesized = { "(" ~ expression ~ ")" }
 
-arithmetic_expression = _{ SOI ~ arithmetic_operand ~ arithmetic_operator ~ arithmetic_operand ~ EOI }
+// A terminal is either a decimal, an integer, variable name or a parenthesized expression.
+terminal = _{ (operand | variable_name) | parenthesized }
+
+// An expression is a sequence of values interleaved with operator tokens.
+expression = { terminal ~ (operator ~ terminal)+ }
+
+// The top-level input rule ensures that the entire input is consumed.
+input = _{ SOI ~ expression ~ EOI }

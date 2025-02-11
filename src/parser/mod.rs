@@ -8,484 +8,351 @@ pub struct ExpressionParser;
 mod tests {
     use crate::parser::{ExpressionParser, Rule};
     use pest::Parser;
+    use std::fmt::{Display, Formatter};
 
-    struct TestInput {
-        pub expression: &'static str,
-        pub expected_tokens: Vec<(Rule, &'static str)>,
+    struct ExpectedPair {
+        pub rule: Rule,
+        pub value: &'static str,
     }
 
-    // This helper function parses the input using the top-level rule,
-    // flattens the produced parse tree, and asserts that the tokens appear in the expected order.
-    fn assert_arithmetic_expression(test_input: TestInput) {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, test_input.expression);
-        match result {
-            Ok(pairs) => {
-                let mut flat_pairs = pairs.flatten();
-                for expected_token in test_input.expected_tokens {
-                    let pair = flat_pairs.next().expect("expected a token");
-                    assert_eq!(
-                        pair.as_rule(),
-                        expected_token.0,
-                        "For expression `{}`, expected rule {:?} but got {:?}",
-                        test_input.expression,
-                        expected_token.0,
-                        pair.as_rule()
-                    );
-                    assert_eq!(
-                        pair.as_str(),
-                        expected_token.1,
-                        "For expression `{}`, expected token text `{}` but got `{}`",
-                        test_input.expression,
-                        expected_token.1,
-                        pair.as_str()
-                    );
-                }
-                // Ensure that the next token is the EOI marker.
-                assert_eq!(
-                    flat_pairs.next().expect("expected a last token").as_rule(),
-                    Rule::EOI,
-                    "For expression `{}`, expected EOI at the end",
-                    test_input.expression
-                );
-            }
-            Err(error) => panic!(
-                "parsing failed for expression `{}`: {:?}",
-                test_input.expression, error
-            ),
+    impl Display for ExpectedPair {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "rule: {:?}, value: {}", self.rule, self.value)
         }
     }
 
-    // ===========================
-    // Valid Expression Test Cases
-    // ===========================
+    fn assert_expression_is_valid(input: &str, expected_pairs: &[ExpectedPair]) {
+        let result = ExpressionParser::parse(Rule::input, input);
+        assert!(
+            result.is_ok(),
+            "the parse result for input '{}' was expected to succeed instead got error: {}",
+            input,
+            result.unwrap_err(),
+        );
+        let pairs = result.unwrap().flatten();
+        assert_eq!(
+            pairs.len(),
+            expected_pairs.len(),
+            "the parsed result was expected to have {} pairs instead got {}",
+            expected_pairs.len(),
+            pairs.len()
+        );
+        for comparison_pair in pairs.zip(expected_pairs.iter()) {
+            let actual = comparison_pair.0;
+            let expected = comparison_pair.1;
+            assert_eq!(
+                actual.as_rule(),
+                expected.rule,
+                "expected a pair to have rule '{:?}' instead got '{:?}'",
+                expected.rule,
+                actual.as_rule()
+            );
+            assert_eq!(
+                actual.as_str(),
+                expected.value,
+                "expected a pair to have value '{}' instead got '{}'",
+                expected.value,
+                actual.as_str()
+            );
+        }
+    }
 
-    #[test]
-    fn test_one_plus_one() {
-        let test_input = TestInput {
-            expression: "1+1",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn assert_expression_is_invalid(input: &str) {
+        let result = ExpressionParser::parse(Rule::input, input);
+        assert!(result.is_err(), "expected the expression to be invalid");
     }
 
     #[test]
-    fn test_leading_trailing_whitespace() {
-        let test_input = TestInput {
-            expression: " 1+1 ",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_valid_expression() {
+        let input = "1 + 1 + (2 - 2)";
+        let expected_pairs = vec![
+            ExpectedPair {
+                rule: Rule::expression,
+                value: input,
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "1",
+            },
+            ExpectedPair {
+                rule: Rule::addition,
+                value: "+",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "1",
+            },
+            ExpectedPair {
+                rule: Rule::addition,
+                value: "+",
+            },
+            ExpectedPair {
+                rule: Rule::parenthesized,
+                value: "(2 - 2)",
+            },
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "2 - 2",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "2",
+            },
+            ExpectedPair {
+                rule: Rule::subtraction,
+                value: "-",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "2",
+            },
+            ExpectedPair {
+                rule: Rule::EOI,
+                value: "",
+            },
+        ];
+        assert_expression_is_valid(input, &expected_pairs);
     }
 
     #[test]
-    fn test_extra_whitespace_between_tokens() {
-        let test_input = TestInput {
-            expression: "   1   +    1   ",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_invalid_expression() {
+        let input = "garbage";
+        assert_expression_is_invalid(input);
     }
 
     #[test]
-    fn test_negative_first_operand() {
-        let test_input = TestInput {
-            expression: "-1+1",
-            expected_tokens: vec![
-                (Rule::integer, "-1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_simple_variable_expression() {
+        let input = "a + 2";
+        let expected_pairs = vec![
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "a + 2",
+            },
+            ExpectedPair {
+                rule: Rule::variable_name,
+                value: "a",
+            },
+            ExpectedPair {
+                rule: Rule::addition,
+                value: "+",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "2",
+            },
+            ExpectedPair {
+                rule: Rule::EOI,
+                value: "",
+            },
+        ];
+        assert_expression_is_valid(input, &expected_pairs);
     }
 
     #[test]
-    fn test_negative_second_operand() {
-        let test_input = TestInput {
-            expression: "1+-1",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "-1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_simple_decimal_expression() {
+        let input = "3.14 * 2";
+        let expected_pairs = vec![
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "3.14 * 2",
+            },
+            ExpectedPair {
+                rule: Rule::decimal,
+                value: "3.14",
+            },
+            ExpectedPair {
+                rule: Rule::multiplication,
+                value: "*",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "2",
+            },
+            ExpectedPair {
+                rule: Rule::EOI,
+                value: "",
+            },
+        ];
+        assert_expression_is_valid(input, &expected_pairs);
     }
 
     #[test]
-    fn test_both_negative_operands() {
-        let test_input = TestInput {
-            expression: "-1+-1",
-            expected_tokens: vec![
-                (Rule::integer, "-1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "-1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_complex_expression() {
+        let input = "a * (b + c) - d / e";
+        let expected_pairs = vec![
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "a * (b + c) - d / e",
+            },
+            ExpectedPair {
+                rule: Rule::variable_name,
+                value: "a",
+            },
+            ExpectedPair {
+                rule: Rule::multiplication,
+                value: "*",
+            },
+            ExpectedPair {
+                rule: Rule::parenthesized,
+                value: "(b + c)",
+            },
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "b + c",
+            },
+            ExpectedPair {
+                rule: Rule::variable_name,
+                value: "b",
+            },
+            ExpectedPair {
+                rule: Rule::addition,
+                value: "+",
+            },
+            ExpectedPair {
+                rule: Rule::variable_name,
+                value: "c",
+            },
+            ExpectedPair {
+                rule: Rule::subtraction,
+                value: "-",
+            },
+            ExpectedPair {
+                rule: Rule::variable_name,
+                value: "d",
+            },
+            ExpectedPair {
+                rule: Rule::division,
+                value: "/",
+            },
+            ExpectedPair {
+                rule: Rule::variable_name,
+                value: "e",
+            },
+            ExpectedPair {
+                rule: Rule::EOI,
+                value: "",
+            },
+        ];
+        assert_expression_is_valid(input, &expected_pairs);
     }
 
     #[test]
-    fn test_subtraction_operator() {
-        let test_input = TestInput {
-            expression: "1-1",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::subtraction, "-"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_whitespace_handling() {
+        let input = "  1+  1 ";
+        let expected_pairs = vec![
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "1+  1 ",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "1",
+            },
+            ExpectedPair {
+                rule: Rule::addition,
+                value: "+",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "1",
+            },
+            ExpectedPair {
+                rule: Rule::EOI,
+                value: "",
+            },
+        ];
+        assert_expression_is_valid(input, &expected_pairs);
     }
 
     #[test]
-    fn test_multiplication_operator() {
-        let test_input = TestInput {
-            expression: "1*1",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::multiplication, "*"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_nested_expression() {
+        let input = "((1+2)*3) - 4.5/var";
+        let expected_pairs = vec![
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "((1+2)*3) - 4.5/var",
+            },
+            ExpectedPair {
+                rule: Rule::parenthesized,
+                value: "((1+2)*3)",
+            },
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "(1+2)*3",
+            },
+            ExpectedPair {
+                rule: Rule::parenthesized,
+                value: "(1+2)",
+            },
+            ExpectedPair {
+                rule: Rule::expression,
+                value: "1+2",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "1",
+            },
+            ExpectedPair {
+                rule: Rule::addition,
+                value: "+",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "2",
+            },
+            ExpectedPair {
+                rule: Rule::multiplication,
+                value: "*",
+            },
+            ExpectedPair {
+                rule: Rule::integer,
+                value: "3",
+            },
+            ExpectedPair {
+                rule: Rule::subtraction,
+                value: "-",
+            },
+            ExpectedPair {
+                rule: Rule::decimal,
+                value: "4.5",
+            },
+            ExpectedPair {
+                rule: Rule::division,
+                value: "/",
+            },
+            ExpectedPair {
+                rule: Rule::variable_name,
+                value: "var",
+            },
+            ExpectedPair {
+                rule: Rule::EOI,
+                value: "",
+            },
+        ];
+        assert_expression_is_valid(input, &expected_pairs);
     }
 
     #[test]
-    fn test_division_operator() {
-        let test_input = TestInput {
-            expression: "1/1",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::division, "/"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
+    fn test_invalid_newline() {
+        let input = "1 +\n2";
+        assert_expression_is_invalid(input);
     }
 
     #[test]
-    fn test_large_integers() {
-        let test_input = TestInput {
-            expression: "123+456",
-            expected_tokens: vec![
-                (Rule::integer, "123"),
-                (Rule::addition, "+"),
-                (Rule::integer, "456"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_negative_large_first_operand() {
-        let test_input = TestInput {
-            expression: "-123+456",
-            expected_tokens: vec![
-                (Rule::integer, "-123"),
-                (Rule::addition, "+"),
-                (Rule::integer, "456"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_integer_subtraction() {
-        let test_input = TestInput {
-            expression: "123-456",
-            expected_tokens: vec![
-                (Rule::integer, "123"),
-                (Rule::subtraction, "-"),
-                (Rule::integer, "456"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_integer_multiplication() {
-        let test_input = TestInput {
-            expression: "123*456",
-            expected_tokens: vec![
-                (Rule::integer, "123"),
-                (Rule::multiplication, "*"),
-                (Rule::integer, "456"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_integer_division() {
-        let test_input = TestInput {
-            expression: "123/456",
-            expected_tokens: vec![
-                (Rule::integer, "123"),
-                (Rule::division, "/"),
-                (Rule::integer, "456"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_decimal_addition() {
-        let test_input = TestInput {
-            expression: "1.0+2.0",
-            expected_tokens: vec![
-                (Rule::decimal, "1.0"),
-                (Rule::addition, "+"),
-                (Rule::decimal, "2.0"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_negative_decimal_addition() {
-        let test_input = TestInput {
-            expression: "-1.0+2.0",
-            expected_tokens: vec![
-                (Rule::decimal, "-1.0"),
-                (Rule::addition, "+"),
-                (Rule::decimal, "2.0"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_decimal_subtraction() {
-        let test_input = TestInput {
-            expression: "1.0-2.0",
-            expected_tokens: vec![
-                (Rule::decimal, "1.0"),
-                (Rule::subtraction, "-"),
-                (Rule::decimal, "2.0"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_decimal_multiplication() {
-        let test_input = TestInput {
-            expression: "1.0*2.0",
-            expected_tokens: vec![
-                (Rule::decimal, "1.0"),
-                (Rule::multiplication, "*"),
-                (Rule::decimal, "2.0"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_decimal_division() {
-        let test_input = TestInput {
-            expression: "1.0/2.0",
-            expected_tokens: vec![
-                (Rule::decimal, "1.0"),
-                (Rule::division, "/"),
-                (Rule::decimal, "2.0"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_negative_decimal_subtraction() {
-        let test_input = TestInput {
-            expression: "-1.0-2.0",
-            expected_tokens: vec![
-                (Rule::decimal, "-1.0"),
-                (Rule::subtraction, "-"),
-                (Rule::decimal, "2.0"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_mixed_operand_first_decimal() {
-        let test_input = TestInput {
-            expression: "1.0+2",
-            expected_tokens: vec![
-                (Rule::decimal, "1.0"),
-                (Rule::addition, "+"),
-                (Rule::integer, "2"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_mixed_operand_second_decimal() {
-        let test_input = TestInput {
-            expression: "1+2.0",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::addition, "+"),
-                (Rule::decimal, "2.0"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_tab_whitespace() {
-        let test_input = TestInput {
-            expression: "\t1\t+\t1\t",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    #[test]
-    fn test_mixed_whitespace() {
-        let test_input = TestInput {
-            expression: " \t 1 \t +\t 1 \t",
-            expected_tokens: vec![
-                (Rule::integer, "1"),
-                (Rule::addition, "+"),
-                (Rule::integer, "1"),
-            ],
-        };
-        assert_arithmetic_expression(test_input);
-    }
-
-    // ===========================
-    // Invalid Expression Test Cases
-    // ===========================
-
-    #[test]
-    fn test_invalid_garbage() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "garbage");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_double_plus() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1++1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_too_many_tokens() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1+1+1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_only_operators() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "++");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_missing_left_operand() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "+1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_missing_right_operand() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1+");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_missing_operator() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1 1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_extra_characters_in_second_operand() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1+1a");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_extra_characters_in_first_operand() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1a+1");
-        assert!(result.is_err());
+    fn test_invalid_operator_sequence() {
+        let input = "1 + * 2";
+        assert_expression_is_invalid(input);
     }
 
     #[test]
     fn test_invalid_empty_input() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "");
-        assert!(result.is_err());
+        let input = "";
+        assert_expression_is_invalid(input);
     }
 
     #[test]
-    fn test_invalid_whitespace_only() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "   ");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_decimal_missing_fraction() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1.+1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_decimal_missing_integer_part() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, ".1+1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_multiple_decimal_points_in_first_operand() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1.1.1+2");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_multiple_decimal_points_in_second_operand() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1+2.2.2");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_plus_sign_in_operand() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1+ +2");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_missing_operand_after_operator() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1*");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_missing_left_operand_multiplication() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "*1");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_invalid_missing_right_operand_division() {
-        let result = ExpressionParser::parse(Rule::arithmetic_expression, "1/");
-        assert!(result.is_err());
+    fn test_invalid_decimal_format() {
+        let input = "1.";
+        assert_expression_is_invalid(input);
     }
 }
