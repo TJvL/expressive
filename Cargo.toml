@@ -1,8 +1,14 @@
 [package]
 name = "expressive"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
-[dependencies]
-pest = "2.7.15"
-pest_derive = "2.7.15"
+[workspace]
+members = [
+    "expressive-expression",
+    "expressive-runtime"
+]
+
+[[bin]]
+name = "exressive_runtime"
+path = "expressive-runtime/src/main.rs"
