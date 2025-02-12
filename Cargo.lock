@@ -77,6 +77,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "expressive_domain"
+version = "0.1.0"
+dependencies = [
+ "expressive_data",
+]
+
+[[package]]
 name = "expressive_expression"
 version = "0.1.0"
 dependencies = [
