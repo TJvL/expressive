@@ -5,10 +5,11 @@ edition = "2021"
 
 [workspace]
 members = [
-    "expressive-expression",
-    "expressive-runtime"
+    "expressive_data",
+    "expressive_expression",
+    "expressive_runtime"
 ]
 
 [[bin]]
-name = "exressive_runtime"
-path = "expressive-runtime/src/main.rs"
+name = "expressive_runtime"
+path = "expressive_runtime/src/main.rs"
