@@ -1,6 +1,6 @@
 use crate::error::ExpressionError;
 use crate::parser::{ExpressionParser, Rule};
-use expressive_data::value::Value;
+use expressive_data::numeric::NumericValue;
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use std::collections::HashMap;
@@ -32,11 +32,8 @@ fn resolve_branch(
 ) -> Result<Value, ExpressionError> {
     match pair.as_rule() {
         Rule::integer => {
-            let val = pair.as_str();
-            let n = val.parse::<i32>().unwrap_or_else(|_| {
-                panic!("expected an integer value to parse instead got: {}", val)
-            });
-            Ok(Value::FastInteger(n))
+            let value = pair.as_str();
+            Ok(NumericValue::)
         }
         Rule::decimal => {
             let val = pair.as_str();

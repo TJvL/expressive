@@ -5,7 +5,8 @@ edition = "2021"
 
 [workspace]
 members = [
-    "expressive_data", "expressive_domain",
+    "expressive_data",
+    "expressive_domain",
     "expressive_expression",
     "expressive_runtime"
 ]
